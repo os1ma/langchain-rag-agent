@@ -1,22 +1,30 @@
 from dotenv import load_dotenv
-from langchain.agents import AgentExecutor, create_openai_functions_agent
+from langchain.agents import AgentExecutor, create_openai_tools_agent
 from langchain.memory import ConversationBufferMemory
+from langchain.tools.retriever import create_retriever_tool
+from langchain_community.vectorstores.faiss import FAISS
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
-from langchain_core.tools import tool
-from langchain_openai import ChatOpenAI
-
-
-@tool
-def dummy():
-    """Dummy tool that does nothing."""
-    return "dummy"
-
-
-tools = [dummy]
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
 
 def create_agent():
-    load_dotenv()
+    texts = [
+        "私の趣味は読書です。",
+        "私の好きな食べ物はカレーです。",
+        "私の嫌いな食べ物は饅頭です。",
+    ]
+
+    vectorstore = FAISS.from_texts(
+        texts, embedding=OpenAIEmbeddings(model="text-embedding-ada-002")
+    )
+    retriever = vectorstore.as_retriever(search_kwargs={"k": 1})
+
+    tool = create_retriever_tool(
+        retriever,
+        "search_about_me",
+        "Searches and returns information about me.",
+    )
+    tools = [tool]
 
     prompt = ChatPromptTemplate.from_messages(
         [
@@ -33,7 +41,7 @@ def create_agent():
         input_key="input", memory_key="chat_history", return_messages=True
     )
 
-    agent = create_openai_functions_agent(llm, tools, prompt)
+    agent = create_openai_tools_agent(llm, tools, prompt)
 
     return AgentExecutor(agent=agent, tools=tools, memory=memory)
 
